@@ -21,10 +21,10 @@
         "version_format": "minor"
     },
     "git": {
-        "16.0": "2.46",
+        "16.0": "2.51",
         "6": "2.51",
         "7": "2.51",
-        "Tumbleweed": "2.50",
+        "Tumbleweed": "2.51",
         "version_format": "minor"
     },
     "helm": {
