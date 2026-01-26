@@ -19,13 +19,13 @@ from jinja2 import Template
 from packaging import version
 from version_utils import rpm
 
+from bci_build.container_attributes import Arch
 from bci_build.logger import LOGGER
 from bci_build.os_version import CAN_BE_LATEST_OS_VERSION
 from bci_build.os_version import OsVersion
 from bci_build.package import LOG_CLEAN
 from bci_build.package import DevelopmentContainer
 from bci_build.package import generate_disk_size_constraints
-from staging.build_result import Arch
 
 from .repomdparser import RepoMDParser
 from .repomdparser import RpmPackage
@@ -92,13 +92,14 @@ COPY {{ pkg.url.split('/') | last }} /tmp/
 {% endfor %}
 
 # Workaround for https://github.com/openSUSE/obs-build/issues/487
-RUN zypper --non-interactive install --no-recommends coreutils sles-release
+RUN zypper -n install --no-recommends coreutils sles-release
 
 # Importing MS GPG keys
 COPY microsoft.asc /tmp
 RUN rpm --import /tmp/microsoft.asc
 
-RUN zypper --non-interactive install --no-recommends libicu {% if image.os_version.is_sle15 -%} libopenssl1_1 {%- else -%} libopenssl3 {%- endif %} /tmp/*rpm
+RUN zypper -n install --no-recommends libicu {% if image.os_version.is_sle15 -%} libopenssl1_1{%- else -%} libopenssl3{%- endif %}
+RUN if [ "$(uname -m)" = "aarch64" ]; then zypper -n install /tmp/*aarch64.rpm; elif [ "$(uname -m)" = "x86_64" ]; then zypper -n install /tmp/*x64.rpm /tmp/*x86_64.rpm; fi
 
 COPY prod.repo /etc/zypp/repos.d/microsoft-dotnet-prod.repo
 COPY dotnet-host.check /etc/zypp/systemCheck.d/dotnet-host.check
@@ -127,7 +128,7 @@ class Package:
         return self.name
 
 
-_DOTNET_EXCLUSIVE_ARCH = [Arch.X86_64]
+_DOTNET_EXCLUSIVE_ARCH = [Arch.AARCH64, Arch.X86_64]
 
 
 @dataclass
@@ -154,16 +155,20 @@ class DotNetBCI(DevelopmentContainer):
         if self.tag_version != "6.0":
             self.use_nonprivileged_user = True
 
-        self.custom_description = f"The {self.pretty_name} based on the SLE Base Container Image. The .NET packages contained in this image come from a 3rd-party repository http://packages.microsoft.com. You can find the respective source code in https://github.com/dotnet. SUSE doesn't provide any support or warranties."
+        self.custom_description = (
+            "The " + self.pretty_name + " {based_on_container}. "
+            "The .NET packages contained in this image come from a 3rd-party repository https://packages.microsoft.com/. "
+            "You can find the respective source code in https://github.com/dotnet. SUSE does not provide any support or warranties."
+        )
 
         ver = version.parse(str(self.tag_version))
 
         # Set the lifecycle information taken from
         # https://dotnet.microsoft.com/en-us/platform/support/policy/dotnet-core
         self.supported_until = {
-            "6.0": datetime.date(2024, 11, 12),
             "8.0": datetime.date(2026, 11, 10),
-            "9.0": datetime.date(2026, 5, 12),
+            "9.0": datetime.date(2026, 11, 10),
+            "10.0": datetime.date(2028, 11, 12),
         }.get(str(self.tag_version))
         assert self.supported_until, (
             f".Net version missing in lifecycle information: {self.tag_version}"
@@ -179,7 +184,7 @@ class DotNetBCI(DevelopmentContainer):
 
         self.custom_labelprefix_end = self.name.replace("-", ".")
         self.exclusive_arch = _DOTNET_EXCLUSIVE_ARCH
-        min_release_counter = {"8.0": 60, "9.0": 20}[str(self.tag_version)]
+        min_release_counter = {"8.0": 60, "9.0": 20, "10.0": 0}[str(self.tag_version)]
         self.min_release_counter = {
             self.os_version: min_release_counter,
         }
@@ -325,14 +330,14 @@ class DotNetBCI(DevelopmentContainer):
         super().prepare_template()
 
 
-_DOTNET_VERSION_T = Literal["8.0", "9.0"]
+_DOTNET_VERSION_T = Literal["8.0", "9.0", "10.0"]
 
-_DOTNET_VERSIONS: list[_DOTNET_VERSION_T] = ["8.0", "9.0"]
+_DOTNET_VERSIONS: list[_DOTNET_VERSION_T] = ["8.0", "9.0", "10.0"]
 
-_LATEST_DOTNET_VERSION = "9.0"
+_LATEST_DOTNET_VERSION = "10.0"
 
 assert _LATEST_DOTNET_VERSION in _DOTNET_VERSIONS
-assert _DOTNET_VERSIONS == sorted(_DOTNET_VERSIONS)
+assert _DOTNET_VERSIONS == sorted(_DOTNET_VERSIONS, key=version.parse)
 assert _DOTNET_VERSIONS[-1] == _LATEST_DOTNET_VERSION
 
 

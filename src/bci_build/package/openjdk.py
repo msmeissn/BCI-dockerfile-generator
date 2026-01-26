@@ -7,6 +7,7 @@ from typing import Literal
 
 from bci_build.container_attributes import Arch
 from bci_build.container_attributes import SupportLevel
+from bci_build.os_version import ALL_NONBASE_OS_VERSIONS
 from bci_build.os_version import _SUPPORTED_UNTIL_SLE
 from bci_build.os_version import OsVersion
 from bci_build.package import DOCKERFILE_RUN
@@ -28,13 +29,13 @@ def supported_until(os_version: OsVersion, jre_major: int) -> datetime.date | No
         21: datetime.date(2031, 6, 30),
         17: datetime.date(2027, 12, 31),
         11: datetime.date(2026, 12, 31),
-        8: datetime.date(2026, 12, 31),
     }
 
     jre_sp_mapping: dict[int, datetime.date | None] = {
         11: _SUPPORTED_UNTIL_SLE[OsVersion.SP5],
         17: _SUPPORTED_UNTIL_SLE[OsVersion.SP7],
         21: _SUPPORTED_UNTIL_SLE[OsVersion.SP7],
+        25: _SUPPORTED_UNTIL_SLE[OsVersion.SP7],
     }
 
     if (
@@ -49,9 +50,7 @@ def supported_until(os_version: OsVersion, jre_major: int) -> datetime.date | No
 
 
 def _get_openjdk_kwargs(
-    os_version: Literal[
-        OsVersion.TUMBLEWEED, OsVersion.SP7, OsVersion.SP6, OsVersion.SP5
-    ],
+    os_version: Literal[OsVersion.TUMBLEWEED, OsVersion.SL16_0, OsVersion.SP7],
     devel: bool,
     java_version: Literal[11, 17, 21, 25],
 ):
@@ -63,9 +62,7 @@ def _get_openjdk_kwargs(
         "JAVA_VERSION": f"{java_version}",
     }
 
-    is_latest = (java_version == 21 and os_version.is_sle15) or (
-        java_version == 25 and os_version.is_tumbleweed
-    )
+    is_latest = java_version == 25
 
     common = {
         # Hardcoding /usr/lib64 in JAVA_HOME atm
@@ -135,24 +132,20 @@ OPENJDK_CONTAINERS = (
             **_get_openjdk_kwargs(os_version=os_version, devel=devel, java_version=17),
             support_level=SupportLevel.L3,
         )
-        for os_version, devel in product(
-            (OsVersion.SP7, OsVersion.SL16_0, OsVersion.TUMBLEWEED), (True, False)
-        )
+        for os_version, devel in product(ALL_NONBASE_OS_VERSIONS, (True, False))
     ]
     + [
         DevelopmentContainer(
             **_get_openjdk_kwargs(os_version=os_version, devel=devel, java_version=21),
             support_level=SupportLevel.L3,
         )
-        for os_version, devel in product(
-            (OsVersion.SP7, OsVersion.SL16_0, OsVersion.TUMBLEWEED), (True, False)
-        )
+        for os_version, devel in product(ALL_NONBASE_OS_VERSIONS, (True, False))
     ]
     + [
         DevelopmentContainer(
             **_get_openjdk_kwargs(os_version=os_version, devel=devel, java_version=25),
             support_level=SupportLevel.L3,
         )
-        for os_version, devel in product((OsVersion.TUMBLEWEED,), (True, False))
+        for os_version, devel in product(ALL_NONBASE_OS_VERSIONS, (True, False))
     ]
 )

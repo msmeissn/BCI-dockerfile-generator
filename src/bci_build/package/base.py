@@ -11,8 +11,10 @@ from bci_build.container_attributes import ImageType
 from bci_build.container_attributes import PackageType
 from bci_build.container_attributes import SupportLevel
 from bci_build.os_version import CAN_BE_LATEST_BASE_OS_VERSION
+from bci_build.os_version import CAN_BE_SAC_VERSION
 from bci_build.os_version import _SUPPORTED_UNTIL_SLE
 from bci_build.os_version import OsVersion
+from bci_build.os_version import get_supported_until_ltss
 from bci_build.package import OsContainer
 from bci_build.package import Package
 
@@ -27,6 +29,7 @@ echo "Configure image: [$kiwi_iname]..."
 #--------------------------------------
 suseSetupProduct
 
+{% if os_version | string != "3" -%}
 # don't have duplicate licenses of the same type
 jdupes -1 -L -r /usr/share/licenses
 
@@ -38,6 +41,7 @@ add-yast-repos
 zypper --non-interactive rm -u live-add-yast-repos jdupes
 {% else -%}
 zypper --non-interactive rm -u jdupes
+{%- endif %}
 {%- endif %}
 
 # Not needed, but neither rpm nor libzypp handle rpmlib(X-CheckUnifiedSystemdir) yet
@@ -113,7 +117,7 @@ fi
 #------------------------------------------
 rm -f /var/log/lastlog
 
-{% if os_version.is_sle15 and not os_version.is_ltss -%}
+{% if os_version.is_sle15 -%}
 #======================================
 # Avoid blkid waiting on udev (bsc#1247914)
 #--------------------------------------
@@ -171,8 +175,6 @@ class Sles15Image(OsContainer):
     @property
     def registry_prefix(self) -> str:
         if self.os_version.is_ltss:
-            if self.os_version == OsVersion.SP3:
-                return "suse/ltss/sle15.3"
             if self.os_version == OsVersion.SP4:
                 return "suse/ltss/sle15.4"
             if self.os_version == OsVersion.SP5:
@@ -202,7 +204,9 @@ def _get_base_kwargs(os_version: OsVersion) -> dict:
         "os_version": os_version,
         "support_level": SupportLevel.L3,
         "supported_until": (
-            _SUPPORTED_UNTIL_SLE.get(os_version) if not os_version.is_ltss else None
+            get_supported_until_ltss(os_version)
+            if os_version.is_ltss
+            else _SUPPORTED_UNTIL_SLE.get(os_version)
         ),
         # we need to exclude i586 and other ports arches from building base images
         "exclusive_arch": [Arch.AARCH64, Arch.X86_64, Arch.PPC64LE, Arch.S390X],
@@ -222,14 +226,21 @@ def _get_base_kwargs(os_version: OsVersion) -> dict:
                     "curl",
                     "gzip",
                     "netcfg",
-                    "openssl-3",
-                    "patterns-base-minimal_base",
                     "tar",
                     "timezone",
                     *os_version.eula_package_names,
                 ]
                 # for run.oci.keep_original_groups=1 (see bsc#1212118)
-                + (["user(nobody)"] if not os_version.is_ltss else [])
+                + (
+                    ["user(nobody)"]
+                    if os_version not in (OsVersion.SP4, OsVersion.SP5)
+                    else []
+                )
+                + (
+                    ["openssl-3", "patterns-base-minimal_base"]
+                    if os_version != OsVersion.SP4
+                    else []
+                )
                 + (
                     [
                         "sle-module-basesystem-release",
@@ -244,11 +255,7 @@ def _get_base_kwargs(os_version: OsVersion) -> dict:
                     if os_version.is_tumbleweed
                     else ["suse-build-key"]
                 )
-                + (
-                    ["procps"]
-                    if os_version in (OsVersion.SP3, OsVersion.SP4, OsVersion.SP5)
-                    else []
-                )
+                + (["procps"] if os_version in (OsVersion.SP4, OsVersion.SP5) else [])
             )
         ]
         + [
@@ -287,6 +294,7 @@ def _get_base_kwargs(os_version: OsVersion) -> dict:
             else []
         ),
         "config_sh_script": _get_base_config_sh_script(os_version),
+        "post_build_checks_containers": os_version in CAN_BE_SAC_VERSION,
     }
 
 
@@ -294,7 +302,6 @@ def _get_base_kwargs(os_version: OsVersion) -> dict:
 BASE_CONTAINERS = [
     Sles15Image(**_get_base_kwargs(os_ver))
     for os_ver in (
-        OsVersion.SP3,
         OsVersion.SP4,
         OsVersion.SP5,
         OsVersion.SP6,

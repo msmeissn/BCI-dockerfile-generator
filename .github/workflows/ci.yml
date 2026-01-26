@@ -17,8 +17,8 @@ jobs:
     container: registry.opensuse.org/opensuse/bci/bci-ci:latest
 
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/cache@v4
+      - uses: actions/checkout@v6
+      - uses: actions/cache@v5
         with:
           path: ~/.cache/pypoetry/virtualenvs
           key: poetry-${{ hashFiles('poetry.lock') }}
@@ -40,12 +40,12 @@ jobs:
       fail-fast: false
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           # need the full history for the unit tests
           fetch-depth: 0
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: ~/.tox
           key: tox-${{ matrix.python_version }}-${{ hashFiles('poetry.lock') }}
@@ -70,11 +70,11 @@ jobs:
     container: registry.opensuse.org/opensuse/bci/bci-ci:latest
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: install dependencies
         run: poetry install
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: ~/.tox
           key: tox-${{ hashFiles('poetry.lock') }}
@@ -83,7 +83,7 @@ jobs:
         run: poetry run sphinx-build -M html source build
 
       - name: upload the build directory
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: build
           path: ./build/html
@@ -94,8 +94,8 @@ jobs:
     needs: documentation
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v6
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v7
         with:
           name: build
           path: ./build
@@ -103,7 +103,7 @@ jobs:
       - run: touch ./build/.nojekyll
 
       - name: deploy to github pages
-        uses: JamesIves/github-pages-deploy-action@6c2d9db40f9296374acc17b90404b6e8864128c8 # v4
+        uses: JamesIves/github-pages-deploy-action@d92aa235d04922e8f08b40ce78cc5442fcfbfa2f # v4
         with:
           branch: gh-pages
           folder: build

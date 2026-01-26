@@ -1,40 +1,43 @@
 {%- if image.os_version.is_ltss -%}
 # SLE {{ image.os_version.pretty_os_version_no_dash }} LTSS Base Container Image
 {%- else -%}
-# SLE BCI {{ image.os_version.pretty_os_version_no_dash }} Base Container Image
+# {{ short_bci }} {{ image.os_version.pretty_os_version_no_dash }} Base Container Image
 {%- endif %}
 {% include 'badges.j2' %}
 
 ## Description
 
-SUSE Linux Enterprise Base Container Images (SLE BCI) provide open, flexible,
+{{ pretty_bci }} provide open, flexible,
 and secure container images. The images include container environments based on
-SUSE Linux Enterprise Server and are available at no cost, they can be freely
-re-distributed, and they are supported across different environments.
+{{ image.os_version.pretty_distribution_base_name }}
+{%- if not image.os_version.is_ltss %}
+and are available at no cost, may be freely redistributed under the BCI EULA,
+{%- endif %}
+and are supported across a large variety of environments.
 
-The Base Container Image is an image used as a foundation for most SLE BCIs. The
-image is intended to be extended for further use, such as a development or a
-testing environment.
+This image serves as a foundation for many {{ short_bci }}s. It is designed to
+be extended for additional use cases, such as development or testing environments.
 
 
 ## Usage
 
-The container image comes with the `zypper` package manager
+
+The container image includes the `zypper` package manager
 {%- if not image.os_version.is_ltss %}
 , the free `SLE_BCI` repository
 {%- endif %}
-and the `container-suseconnect` utility. This allows you to access
-the full SLE repositories with a valid SLE subscription. The image is designed
-to be extended by installing packages required for your specific scenario.
+and the `container-suseconnect` utility. This enables access to the full
+{{ image.os_version.pretty_distribution_base_name }} repositories with a valid subscription.
+The image is intended to be extended by installing packages required for your specific use case.
 
-To build a custom image using a `Containerfile` that includes the
-[`skopeo`](https://github.com/containers/skopeo) utility, create the following
-`Containerfile`:
+To build a custom image that includes the [`skopeo`](https://github.com/containers/skopeo) utility,
+ use the following `Containerfile`:
+
 ```Dockerfile
 FROM {{ image.pretty_reference }}
 RUN set -euo pipefail; \
     zypper -n ref; \
-    zypper -n in skopeo; \
+    zypper -n install skopeo; \
     zypper -n clean -a ; \
     rm -rf /var/log/{lastlog,tallylog,zypper.log,zypp/history,YaST2}
 ```
@@ -44,11 +47,11 @@ Then build the container using `buildah`:
 buildah bud -t bci-skopeo .
 ```
 
-The image can also be used interactively to create a container with skopeo
-installed in it:
+You can also use the image interactively to create a container with `skopeo` installed:
+
 ```ShellSession
 $ podman run -ti --rm {{ image.pretty_reference }}
-# zypper -n in skopeo
+# zypper -n install skopeo
 ...
 # skopeo inspect -f {% raw %}"{{ .Name }}"{% endraw %} docker://{{ image.pretty_reference }}
 {% set ref_list = image.pretty_reference.split(":") %}{{ ref_list[0] }}
@@ -57,16 +60,17 @@ $ podman run -ti --rm {{ image.pretty_reference }}
 {%- if not image.os_version.is_ltss %}
 ### The SLE_BCI repository
 
-The container image comes with the free `SLE_BCI` repository. The repository
-provides the latest version of a subset of packages from SUSE Linux Enterprise.
-These packages are available at no cost and can be freely redistributed.
+The container image includes the free `SLE_BCI` repository, which provides
+the latest versions of a subset of packages from {{ image.os_version.pretty_distribution_base_name }}.
+These packages are available at no cost and may be freely redistributed.
 {%- endif %}
 
-### Getting access to the SLE repositories
+### Getting access to the {{ image.os_version.distribution_base_name }} repositories
+
 
 The `container-suseconnect` utility in the image can automatically add the full
-SUSE Linux Enterprise repositories into the running container if you have a
-valid SLE subscription.
+repositories into the running container if you have a valid
+{{ image.os_version.pretty_distribution_base_name }} subscription.
 
 Find more information about container-suseconnect in the
 [`container-suseconnect`](https://documentation.suse.com/container/all/single-html/Container-guide/index.html#sec-container-suseconnect)

@@ -16,8 +16,6 @@ class OsVersion(enum.Enum):
     SP5 = 5
     #: SLE 15 Service Pack 4
     SP4 = 4
-    #: SLE 15 Service Pack 3
-    SP3 = 3
     #: SUSE Linux 16.0
     SL16_0 = "16.0"
     #: SUSE Linux 16.1
@@ -49,7 +47,7 @@ class OsVersion(enum.Enum):
             # already part of the base identifier
             return ""
         if self.is_sl16:
-            return "16"
+            return self.pretty_print
 
         return f"15 SP{self.value}"
 
@@ -59,10 +57,42 @@ class OsVersion(enum.Enum):
             return "openSUSE Tumbleweed"
         elif self.is_ltss:
             return "SLE LTSS"
-        elif self.is_sle15 or self.is_sl16:
+        elif self.is_sle15:
             return "SLE"
+        elif self.is_sl16:
+            return "SUSE Linux"
 
         raise NotImplementedError(f"Unknown os_version: {self.value}")
+
+    @property
+    def pretty_distribution_base_name(self) -> str:
+        if self.is_tumbleweed:
+            return "openSUSE Tumbleweed"
+        elif self.is_ltss:
+            return "SUSE Linux Enterprise Long Term Service Pack Support (LTSS)"
+        elif self.is_sle15 or self.is_sl16:
+            return "SUSE Linux Enterprise Server"
+
+        raise NotImplementedError(f"Unknown os_version: {self.value}")
+
+    @property
+    def short_product_name(self) -> str:
+        if self.is_tumbleweed:
+            return "openSUSE BCI"
+        if self.is_sle15:
+            return "SLE BCI"
+        return "SUSE Linux BCI"
+
+    @property
+    def pretty_product_name(self) -> str:
+        if self.is_tumbleweed:
+            return "openSUSE Tumbleweed Base Container Images"
+        if self.is_ltss:
+            return "SLE LTSS Base Container Images"
+        if self.is_sle15:
+            return "SUSE Linux Enterprise Base Container Images"
+        if self.is_sl16:
+            return "SUSE Linux Base Container Images"
 
     @property
     def full_os_name(self) -> str:
@@ -98,7 +128,6 @@ class OsVersion(enum.Enum):
     @property
     def is_sle15(self) -> bool:
         return self.value in (
-            OsVersion.SP3.value,
             OsVersion.SP4.value,
             OsVersion.SP5.value,
             OsVersion.SP6.value,
@@ -143,6 +172,9 @@ class OsVersion(enum.Enum):
             return ("skelcd-EULA-sles",)
         if self.is_sle15:
             return ("skelcd-EULA-bci",)
+        # TODO: remove when SL16_1 is released
+        if self.value == OsVersion.SL16_1.value:
+            return ("skelcd-EULA-SLES",)
         if self.is_sl16:
             return ("skelcd-EULA-BCI",)
         return ()
@@ -169,7 +201,6 @@ class OsVersion(enum.Enum):
 #: Operating system versions that have the label ``com.suse.release-stage`` set
 #: to ``released``.
 RELEASED_OS_VERSIONS: list[OsVersion] = [
-    OsVersion.SP3,
     OsVersion.SP4,
     OsVersion.SP5,
     OsVersion.SP6,
@@ -181,13 +212,13 @@ RELEASED_OS_VERSIONS: list[OsVersion] = [
 # For which versions to create Application and Language Containers?
 ALL_NONBASE_OS_VERSIONS: list[OsVersion] = [
     OsVersion.SP7,
-    OsVersion.SL16_0,
     OsVersion.TUMBLEWEED,
+    OsVersion.SL16_0,
+    OsVersion.SL16_1,
 ]
 
 # For which versions to create Base Container Images?
 ALL_BASE_OS_VERSIONS: list[OsVersion] = [
-    OsVersion.SP6,
     OsVersion.SP7,
     OsVersion.TUMBLEWEED,
     OsVersion.SL16_0,
@@ -195,11 +226,11 @@ ALL_BASE_OS_VERSIONS: list[OsVersion] = [
 ]
 
 # List of SPs that are already under LTSS
-ALL_OS_LTSS_VERSIONS: list[OsVersion] = [OsVersion.SP3, OsVersion.SP4, OsVersion.SP5]
+ALL_OS_LTSS_VERSIONS: list[OsVersion] = [OsVersion.SP4, OsVersion.SP5, OsVersion.SP6]
 
-# joint set of BASE and NON_BASE versions
+# joint set of BASE, NON_BASE and LTSS versions
 ALL_OS_VERSIONS: set[OsVersion] = {
-    v for v in (*ALL_BASE_OS_VERSIONS, *ALL_NONBASE_OS_VERSIONS)
+    v for v in (*ALL_BASE_OS_VERSIONS, *ALL_NONBASE_OS_VERSIONS, *ALL_OS_LTSS_VERSIONS)
 }
 
 CAN_BE_LATEST_BASE_OS_VERSION: list[OsVersion] = [
@@ -212,6 +243,8 @@ CAN_BE_LATEST_OS_VERSION: list[OsVersion] = [
     OsVersion.TUMBLEWEED,
 ]
 
+CAN_BE_SAC_VERSION: list[OsVersion] = [OsVersion.SP7]
+
 # End of General Support Dates
 _SUPPORTED_UNTIL_SLE: dict[OsVersion, datetime.date | None] = {
     OsVersion.SP4: datetime.date(2023, 12, 31),
@@ -221,3 +254,16 @@ _SUPPORTED_UNTIL_SLE: dict[OsVersion, datetime.date | None] = {
     OsVersion.SL16_0: datetime.date(2027, 11, 30),
     OsVersion.SL16_1: datetime.date(2028, 11, 30),
 }
+
+
+def get_supported_until_ltss(os_version: OsVersion) -> datetime.date | None:
+    """Returns the end of LTSS for images under LTSS, otherwise end of general support if known"""
+    match os_version:
+        case OsVersion.SP4:
+            return datetime.date(2026, 12, 31)
+        case OsVersion.SP5:
+            return datetime.date(2027, 12, 31)
+        case OsVersion.SP6:
+            return datetime.date(2028, 12, 31)
+        case _:
+            return _SUPPORTED_UNTIL_SLE.get(os_version)

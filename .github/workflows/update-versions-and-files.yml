@@ -5,14 +5,17 @@ on:
     - cron: '0 0 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   update-files:
     runs-on: ubuntu-latest
     container: registry.opensuse.org/opensuse/bci/bci-ci:latest
     steps:
       - name: checkout source code
-        uses: actions/checkout@v5
-      - uses: actions/cache@v4
+        uses: actions/checkout@v6
+      - uses: actions/cache@v5
         with:
           path: ~/.cache/pypoetry/virtualenvs
           key: poetry-${{ hashFiles('poetry.lock') }}
@@ -32,8 +35,9 @@ jobs:
         run: ./update-files.sh
 
       - name: create a pull request with the updated versions and files
-        uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7
+        uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # v7
         with:
+          # separate token https://github.com/peter-evans/create-pull-request/blob/main/docs/concepts-guidelines.md#triggering-further-workflow-runs
           token: ${{ secrets.CHECKOUT_TOKEN }}
           delete-branch: true
           commit-message: "🤖: Update package versions and external files"

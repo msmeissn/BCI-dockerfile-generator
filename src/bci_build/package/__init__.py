@@ -38,7 +38,7 @@ from bci_build.util import write_to_file
 _BASH_SET: str = "set -euo pipefail"
 
 #: a ``RUN`` command with a common set of bash flags applied to prevent errors
-#: from not being noticed
+#: from going unnoticed
 DOCKERFILE_RUN: str = f"RUN {_BASH_SET};"
 
 #: a sed statement to avoid using `EVALUATE=udev` in `/etc/blkid.conf` which doesn't work inside containers
@@ -96,7 +96,7 @@ def _build_tag_prefix(os_version: OsVersion) -> str:
     if os_version == OsVersion.TUMBLEWEED:
         return "opensuse/bci"
     if os_version.is_sle15 and os_version.is_ltss:
-        return "suse/ltss/sle%OS_VERSION_ID_SP%"
+        return f"suse/ltss/sle15.{os_version}"
 
     return "bci"
 
@@ -115,7 +115,7 @@ class BaseContainerImage(abc.ABC):
     #: Human readable name that will be inserted into the image title and description
     pretty_name: str
 
-    #: Optional a package_name, used for creating the package name on OBS or IBS in
+    #: Optional package_name, used for creating the package name on OBS or IBS in
     # ``devel:BCI:SLE-15-SP$ver`` (on  OBS) or ``SUSE:SLE-15-SP$ver:Update:BCI`` (on IBS)
     package_name: str | None = None
 
@@ -173,13 +173,16 @@ class BaseContainerImage(abc.ABC):
         default_factory=dict
     )
 
+    #: add reports from checking with trivy, clamav, and neuvector to the OCI
+    post_build_checks_containers: bool = False
+
     #: build flavors to produce for this container variant
     build_flavor: str | None = None
 
     #: if true, then the build flavor is used in the tag, i.e. ``$name-$flavor:tag``
     use_build_flavor_in_tag: bool = True
 
-    #: create that this container is part of
+    #: crate that this container is part of
     crate: ContainerCrate = None
 
     #: Add any replacements via `obs-service-replace_using_package_version
@@ -203,7 +206,7 @@ class BaseContainerImage(abc.ABC):
     #:   is not possible and will result in an error.
     custom_end: str = ""
 
-    #: This string is appended to the the build stage in a multistage build and can
+    #: This string is appended to the build stage in a multistage build and can
     #: contain arbitrary instructions valid for a :file:`Dockerfile`.
     build_stage_custom_end: str | None = None
 
@@ -214,7 +217,7 @@ class BaseContainerImage(abc.ABC):
 
     #: A script that is put into :file:`config.sh` if a kiwi image is
     #: created. If a :file:`Dockerfile` based build is used then this script is
-    #: prependend with a :py:const:`~bci_build.package.DOCKERFILE_RUN` and added
+    #: prepended with a :py:const:`~bci_build.package.DOCKERFILE_RUN` and added
     #: at the end of the ``Dockerfile``. It must thus fit on a single line if
     #: you want to be able to build from a kiwi and :file:`Dockerfile` at the
     #: same time!
@@ -308,9 +311,7 @@ class BaseContainerImage(abc.ABC):
             )
 
         if self.build_recipe_type is None:
-            self.build_recipe_type = (
-                BuildType.KIWI if self.os_version == OsVersion.SP3 else BuildType.DOCKER
-            )
+            self.build_recipe_type = BuildType.DOCKER
 
         if not self._publish_registry:
             self._publish_registry = publish_registry(self.os_version)
@@ -377,7 +378,7 @@ class BaseContainerImage(abc.ABC):
         is newer than the other in the build service."""
         # KIWI used to require an at least 3 component version X.Y.Z. For SLE, we set
         # X.Y to MAJOR.MINOR and set Z to 0 for OsContainers. Derived
-        # containers inhert the base build_version X.Y and append a suffix .Z.ZZ
+        # containers inherit the base build_version X.Y and append a suffix .Z.ZZ
 
         # It is important that the behavior for OsContainers is identical
         # between KIWI and Dockerfile builds so that we can switch between these
@@ -406,7 +407,7 @@ class BaseContainerImage(abc.ABC):
         """Return a BuildVersion that is compatible with the requirements that KIWI imposes.
         https://osinside.github.io/kiwi/image_description/elements.html#preferences-version
 
-        It a version strictly in the format X.Y.Z.
+        It is a version strictly in the format X.Y.Z.
         """
         build_ver: str | None = self.build_version
         if build_ver:
@@ -479,7 +480,7 @@ class BaseContainerImage(abc.ABC):
         """This part is appended at the end of the :file:`Dockerfile`. It is either
         generated from :py:attr:`BaseContainerImage.custom_end` or by prepending
         ``RUN`` in front of :py:attr:`BaseContainerImage.config_sh_script`. The
-        later implies that the script in that variable fits on a single line or
+        latter implies that the script in that variable fits on a single line or
         newlines are escaped, e.g. via `ansi escapes
         <https://stackoverflow.com/a/33439625>`_.
 
@@ -664,7 +665,7 @@ exit 0
     @property
     def packages(self) -> str:
         """The list of packages joined so that it can be appended to a
-        :command:`zypper in`.
+        :command:`zypper install`.
 
         """
         packages_to_install: list[str] = []
@@ -882,7 +883,7 @@ exit 0
         """Returns the human readable registry URL to this image. It is intended
         to be used in the image documentation.
 
-        This url needn't point to an exact version-release but can include just
+        This url does not need to point to an exact version-release but can include just
         the major os version or the latest tag.
 
         """
@@ -909,7 +910,7 @@ exit 0
         description_formatters = {
             "pretty_name": self.pretty_name,
             "based_on_container": (
-                f"based on the {self.os_version.distribution_base_name} Base Container Image"
+                f"based on the {self.os_version.pretty_product_name[:-1]}"
             ),
             "podman_only": "This container is only supported with podman.",
             "privileged_only": "This container is only supported in privileged mode.",
@@ -971,7 +972,11 @@ exit 0
             loader=jinja2.FileSystemLoader(Path(__file__).parent / "templates"),
             autoescape=jinja2.select_autoescape(["md"]),
         )
-        return jinja2_env.from_string(readme_template).render(image=self)
+        return jinja2_env.from_string(readme_template).render(
+            short_bci=self.os_version.short_product_name,
+            pretty_bci=self.os_version.pretty_product_name,
+            image=self,
+        )
 
     @property
     def extra_label_lines(self) -> str:
@@ -1038,7 +1043,7 @@ exit 0
         description.
 
         This attribute is used by kiwi to add additional tags to the image under
-        it's primary name. This string contains a coma separated list of all
+        it's primary name. This string contains a comma-separated list of all
         build tags (except for the primary one) that have the **same** name as
         the image itself.
 
@@ -1497,7 +1502,6 @@ from .pulseaudio import PULSEAUDIO_CONTAINERS  # noqa: E402
 from .python import BCI_CI_CONTAINERS  # noqa: E402
 from .python import PYTHON_3_6_CONTAINERS  # noqa: E402
 from .python import PYTHON_3_11_CONTAINERS  # noqa: E402
-from .python import PYTHON_3_12_CONTAINERS  # noqa: E402
 from .python import PYTHON_3_13_CONTAINERS  # noqa: E402
 from .python import PYTHON_TW_CONTAINERS  # noqa: E402
 from .rmt import RMT_CONTAINERS  # noqa: E402
@@ -1520,7 +1524,6 @@ ALL_CONTAINER_IMAGE_NAMES: dict[str, BaseContainerImage] = {
         *COSIGN_CONTAINERS,
         *PYTHON_3_6_CONTAINERS,
         *PYTHON_3_11_CONTAINERS,
-        *PYTHON_3_12_CONTAINERS,
         *PYTHON_3_13_CONTAINERS,
         *PYTHON_TW_CONTAINERS,
         *BCI_CI_CONTAINERS,
@@ -1594,7 +1597,7 @@ def main() -> None:
         type=str,
         nargs=1,
         choices=SORTED_CONTAINER_IMAGE_NAMES,
-        help="The BCI container image, which package contents should be written to the disk",
+        help="The BCI container image, whose package contents should be written to the disk",
     )
     parser.add_argument(
         "destination",

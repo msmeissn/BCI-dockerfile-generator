@@ -14,19 +14,18 @@ jobs:
       matrix:
         os_version:
           - 7
-          - 6
           - "16.0"
           - "16.1"
           - Tumbleweed
 
     steps:
       # we need all branches for the build checks
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.CHECKOUT_TOKEN }}
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: ~/.cache/pypoetry/virtualenvs
           key: poetry-${{ hashFiles('poetry.lock') }}

@@ -21,6 +21,8 @@ _RUST_CC_PATH = "/usr/local/bin/cc"
 # and we give us three weeks of buffer, leading to release date + 6 + 6 + 3
 _RUST_SUPPORT_OVERLAP: datetime.timedelta = datetime.timedelta(weeks=6 + 6 + 3)
 _RUST_SUPPORT_ENDS = {
+    "1.92": datetime.date(2025, 12, 11) + _RUST_SUPPORT_OVERLAP,
+    "1.91": datetime.date(2025, 10, 30) + _RUST_SUPPORT_OVERLAP,
     "1.90": datetime.date(2025, 9, 18) + _RUST_SUPPORT_OVERLAP,
     "1.89": datetime.date(2025, 8, 7) + _RUST_SUPPORT_OVERLAP,
     "1.88": datetime.date(2025, 6, 26) + _RUST_SUPPORT_OVERLAP,
@@ -40,18 +42,18 @@ _RUST_SUPPORT_ENDS = {
 }
 
 # ensure that the **latest** rust version is the last one!
-_RUST_VERSIONS: list[str] = ["1.89", "1.90"]
+_RUST_VERSIONS: list[str] = ["1.91", "1.92"]
 
-_RUST_SL16_VERSIONS: list[str] = ["1.87", "1.88"]
+_RUST_SL16_VERSIONS: list[str] = ["1.91", "1.92"]
 
-_RUST_TW_VERSIONS: list[str] = ["1.88", "1.90"]
+_RUST_TW_VERSIONS: list[str] = ["1.91", "1.92"]
 
 
 def _rust_is_stable_version(os_version: OsVersion, rust_version: str) -> bool:
     """Return the latest stable rust version"""
     if os_version in (OsVersion.TUMBLEWEED,):
         return _RUST_TW_VERSIONS[-1] == rust_version
-    if os_version in (OsVersion.SL16_0,):
+    if os_version in (OsVersion.SL16_0, OsVersion.SL16_1):
         return _RUST_SL16_VERSIONS[-1] == rust_version
 
     return _RUST_VERSIONS[-1] == rust_version
@@ -129,9 +131,9 @@ requires:rust{rust_version}
         *product(
             _RUST_VERSIONS,
             set(ALL_NONBASE_OS_VERSIONS)
-            - set([OsVersion.TUMBLEWEED, OsVersion.SL16_0]),
+            - set([OsVersion.TUMBLEWEED, OsVersion.SL16_0, OsVersion.SL16_1]),
         ),
         *product(_RUST_TW_VERSIONS, [OsVersion.TUMBLEWEED]),
-        *product(_RUST_SL16_VERSIONS, [OsVersion.SL16_0]),
+        *product(_RUST_SL16_VERSIONS, [OsVersion.SL16_0, OsVersion.SL16_1]),
     )
 ]

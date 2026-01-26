@@ -31,8 +31,8 @@ from bci_build.templates import KIWI_TEMPLATE
 #!BuildTag: bci/test:27-%RELEASE%
 #!BuildTag: bci/test:27
 #!BuildName: bci-test-27
-#!BuildVersion: 15.6.27
-FROM registry.suse.com/bci/bci-base:15.6
+#!BuildVersion: 15.7.27
+FROM registry.suse.com/bci/bci-base:15.7
 
 RUN \\
     zypper -n install --no-recommends gcc emacs
@@ -47,7 +47,7 @@ RUN sed -i 's/^\\([^:]*:[^:]*:\\)[^:]*\\(:.*\\)$/\\1\\2/' /etc/shadow
 # labelprefix=com.suse.bci.test
 LABEL org.opencontainers.image.authors="https://github.com/SUSE/bci/discussions"
 LABEL org.opencontainers.image.title="SLE BCI Test"
-LABEL org.opencontainers.image.description="Test container based on the SLE Base Container Image."
+LABEL org.opencontainers.image.description="Test container based on the SUSE Linux Enterprise Base Container Image."
 LABEL org.opencontainers.image.version="27"
 LABEL org.opencontainers.image.url="https://www.suse.com/products/base-container-images/"
 LABEL org.opencontainers.image.created="%BUILDTIME%"
@@ -83,7 +83,7 @@ Copyright header
     <specification>SLE BCI Test Container Image</specification>
   </description>
   <preferences>
-    <type image="docker" derived_from="obsrepositories:/bci/bci-base#15.6">
+    <type image="docker" derived_from="obsrepositories:/bci/bci-base#15.7">
       <containerconfig
           name="bci/test"
           tag="27-%RELEASE%"
@@ -92,7 +92,7 @@ Copyright header
           <suse_label_helper:add_prefix prefix="com.suse.bci.test">
             <label name="org.opencontainers.image.authors" value="https://github.com/SUSE/bci/discussions"/>
             <label name="org.opencontainers.image.title" value="SLE BCI Test"/>
-            <label name="org.opencontainers.image.description" value="Test container based on the SLE Base Container Image."/>
+            <label name="org.opencontainers.image.description" value="Test container based on the SUSE Linux Enterprise Base Container Image."/>
             <label name="org.opencontainers.image.version" value="27"/>
             <label name="org.opencontainers.image.created" value="%BUILDTIME%"/>
             <label name="org.opencontainers.image.vendor" value="SUSE LLC"/>
@@ -113,7 +113,7 @@ Copyright header
         </labels>
       </containerconfig>
     </type>
-    <version>15.6.27</version>
+    <version>15.7.27</version>
     <packagemanager>zypper</packagemanager>
     <rpm-excludedocs>true</rpm-excludedocs>
   </preferences>
@@ -132,7 +132,7 @@ Copyright header
                 supported_until=date(2024, 2, 1),
                 package_list=["gcc", "emacs"],
                 package_name="test-image",
-                os_version=OsVersion.SP6,
+                os_version=OsVersion.SP7,
                 version="27",
                 custom_end="""COPY test.el .
 RUN emacs -Q --batch test.el
@@ -167,8 +167,8 @@ RUN sed -i 's/^\\([^:]*:[^:]*:\\)[^:]*\\(:.*\\)$/\\1\\2/' /etc/shadow
 # Define labels according to https://en.opensuse.org/Building_derived_containers
 # labelprefix=com.suse.bci.test
 LABEL org.opencontainers.image.authors="https://github.com/SUSE/bci/discussions"
-LABEL org.opencontainers.image.title="SLE BCI DevelopmentContainer Test"
-LABEL org.opencontainers.image.description="DevelopmentContainer Test container based on the SLE Base Container Image."
+LABEL org.opencontainers.image.title="SUSE Linux BCI DevelopmentContainer Test"
+LABEL org.opencontainers.image.description="DevelopmentContainer Test container based on the SUSE Linux Base Container Image."
 LABEL org.opencontainers.image.version="%%emacs_ver%%"
 LABEL org.opencontainers.image.url="https://www.suse.com/products/base-container-images/"
 LABEL org.opencontainers.image.created="%BUILDTIME%"
@@ -196,7 +196,7 @@ Copyright header
   <description type="system">
     <author>SUSE LLC</author>
     <contact>https://www.suse.com/</contact>
-    <specification>SLE BCI DevelopmentContainer Test Container Image</specification>
+    <specification>SUSE Linux BCI DevelopmentContainer Test Container Image</specification>
   </description>
   <preferences>
     <type image="docker" derived_from="obsrepositories:/bci/bci-base#16.1">
@@ -207,8 +207,8 @@ Copyright header
         <labels>
           <suse_label_helper:add_prefix prefix="com.suse.bci.test">
             <label name="org.opencontainers.image.authors" value="https://github.com/SUSE/bci/discussions"/>
-            <label name="org.opencontainers.image.title" value="SLE BCI DevelopmentContainer Test"/>
-            <label name="org.opencontainers.image.description" value="DevelopmentContainer Test container based on the SLE Base Container Image."/>
+            <label name="org.opencontainers.image.title" value="SUSE Linux BCI DevelopmentContainer Test"/>
+            <label name="org.opencontainers.image.description" value="DevelopmentContainer Test container based on the SUSE Linux Base Container Image."/>
             <label name="org.opencontainers.image.version" value="%%emacs_ver%%"/>
             <label name="org.opencontainers.image.created" value="%BUILDTIME%"/>
             <label name="org.opencontainers.image.vendor" value="SUSE LLC"/>
@@ -260,8 +260,8 @@ Copyright header
 #!BuildTag: bci/test:29-%RELEASE%
 #!BuildTag: bci/test:29
 #!BuildName: bci-test-29
-#!BuildVersion: 15.6.29
-FROM registry.suse.com/bci/bci-base:15.6
+#!BuildVersion: 15.7.29
+FROM registry.suse.com/bci/bci-base:15.7
 
 RUN \\
     zypper -n install --no-recommends gcc emacs
@@ -276,7 +276,7 @@ RUN sed -i 's/^\\([^:]*:[^:]*:\\)[^:]*\\(:.*\\)$/\\1\\2/' /etc/shadow
 # labelprefix=com.suse.bci.test
 LABEL org.opencontainers.image.authors="https://github.com/SUSE/bci/discussions"
 LABEL org.opencontainers.image.title="SLE BCI Test"
-LABEL org.opencontainers.image.description="Test container based on the SLE Base Container Image."
+LABEL org.opencontainers.image.description="Test container based on the SUSE Linux Enterprise Base Container Image."
 LABEL org.opencontainers.image.version="29"
 LABEL org.opencontainers.image.url="https://www.suse.com/products/base-container-images/"
 LABEL org.opencontainers.image.created="%BUILDTIME%"
@@ -309,7 +309,7 @@ Copyright header
     <specification>SLE BCI Test Container Image</specification>
   </description>
   <preferences>
-    <type image="docker" derived_from="obsrepositories:/bci/bci-base#15.6">
+    <type image="docker" derived_from="obsrepositories:/bci/bci-base#15.7">
       <containerconfig
           name="bci/test"
           tag="29-%RELEASE%"
@@ -319,7 +319,7 @@ Copyright header
           <suse_label_helper:add_prefix prefix="com.suse.bci.test">
             <label name="org.opencontainers.image.authors" value="https://github.com/SUSE/bci/discussions"/>
             <label name="org.opencontainers.image.title" value="SLE BCI Test"/>
-            <label name="org.opencontainers.image.description" value="Test container based on the SLE Base Container Image."/>
+            <label name="org.opencontainers.image.description" value="Test container based on the SUSE Linux Enterprise Base Container Image."/>
             <label name="org.opencontainers.image.version" value="29"/>
             <label name="org.opencontainers.image.created" value="%BUILDTIME%"/>
             <label name="org.opencontainers.image.vendor" value="SUSE LLC"/>
@@ -339,7 +339,7 @@ Copyright header
         </labels>
       </containerconfig>
     </type>
-    <version>15.6.29</version>
+    <version>15.7.29</version>
     <packagemanager>zypper</packagemanager>
     <rpm-excludedocs>true</rpm-excludedocs>
   </preferences>
@@ -357,7 +357,7 @@ Copyright header
                 pretty_name="Test",
                 package_list=["gcc", "emacs"],
                 package_name="emacs-image",
-                os_version=OsVersion.SP6,
+                os_version=OsVersion.SP7,
                 entrypoint_user="emacs",
                 version="29",
             ),
@@ -670,7 +670,7 @@ COPY --from=builder /target /
 # labelprefix=com.suse.application.test
 LABEL org.opencontainers.image.authors=""
 LABEL org.opencontainers.image.title="Test"
-LABEL org.opencontainers.image.description="Test container based on the SLE Base Container Image."
+LABEL org.opencontainers.image.description="Test container based on the SUSE Linux Enterprise Base Container Image."
 LABEL org.opencontainers.image.version="%%emacs_version%%"
 LABEL org.opencontainers.image.url="https://apps.rancher.io/applications/test"
 LABEL org.opencontainers.image.created="%BUILDTIME%"
@@ -737,7 +737,7 @@ COPY --from=builder /target /
 # labelprefix=com.suse.application.git
 LABEL org.opencontainers.image.authors=""
 LABEL org.opencontainers.image.title="Git"
-LABEL org.opencontainers.image.description="Git container based on the SLE Base Container Image."
+LABEL org.opencontainers.image.description="Git container based on the SUSE Linux Enterprise Base Container Image."
 LABEL org.opencontainers.image.version="%%git_version%%"
 LABEL org.opencontainers.image.url="https://apps.rancher.io/applications/git"
 LABEL org.opencontainers.image.created="%BUILDTIME%"

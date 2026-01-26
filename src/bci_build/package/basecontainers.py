@@ -1,6 +1,5 @@
 """Base container images maintained by the BCI generator"""
 
-import datetime
 import os
 import textwrap
 from pathlib import Path
@@ -13,8 +12,10 @@ from bci_build.os_version import ALL_BASE_OS_VERSIONS
 from bci_build.os_version import ALL_OS_LTSS_VERSIONS
 from bci_build.os_version import ALL_OS_VERSIONS
 from bci_build.os_version import CAN_BE_LATEST_BASE_OS_VERSION
+from bci_build.os_version import CAN_BE_SAC_VERSION
 from bci_build.os_version import _SUPPORTED_UNTIL_SLE
 from bci_build.os_version import OsVersion
+from bci_build.os_version import get_supported_until_ltss
 from bci_build.package import DOCKERFILE_RUN
 from bci_build.package import LOG_CLEAN
 from bci_build.package import OsContainer
@@ -75,6 +76,7 @@ MICRO_CONTAINERS = [
             # includes device and inode numbers that change on deploy
             {DOCKERFILE_RUN} rm -vf /var/cache/ldconfig/aux-cache
         """),
+        post_build_checks_containers=os_version in CAN_BE_SAC_VERSION,
     )
     for os_version in ALL_BASE_OS_VERSIONS
 ]
@@ -132,23 +134,23 @@ INIT_CONTAINERS = [
 
 _FIPS_ASSET_BASEURL = "https://api.opensuse.org/public/build/"
 
-# https://csrc.nist.gov/CSRC/media/projects/cryptographic-module-validation-program/documents/security-policies/140sp3991.pdf
-# Chapter 9.1 Crypto Officer Guidance
-_FIPS_15_SP2_BINARIES: list[str] = [
-    f"SUSE:SLE-15-SP2:Update/pool/x86_64/openssl-1_1.18804/{name}-1.1.1d-11.20.1.x86_64.rpm"
-    for name in ("openssl-1_1", "libopenssl1_1", "libopenssl1_1-hmac")
-] + [
-    f"SUSE:SLE-15-SP1:Update/pool/x86_64/libgcrypt.15117/{name}-1.8.2-8.36.1.x86_64.rpm"
-    for name in ("libgcrypt20", "libgcrypt20-hmac")
-]
-
-# submitted, not yet certified
+# https://csrc.nist.gov/CSRC/media/projects/cryptographic-module-validation-program/documents/security-policies/140sp3992.pdf
+# https://csrc.nist.gov/CSRC/media/projects/cryptographic-module-validation-program/documents/security-policies/140sp4725.pdf
 _FIPS_15_SP4_BINARIES: list[str] = [
     f"SUSE:SLE-15-SP4:Update/pool/x86_64/openssl-1_1.28168/{name}-1.1.1l-150400.7.28.1.x86_64.rpm"
     for name in ("openssl-1_1", "libopenssl1_1", "libopenssl1_1-hmac")
 ] + [
     f"SUSE:SLE-15-SP4:Update/pool/x86_64/libgcrypt.28151/{name}-1.9.4-150400.6.8.1.x86_64.rpm"
     for name in ("libgcrypt20", "libgcrypt20-hmac")
+]
+
+# https://csrc.nist.gov/CSRC/media/projects/cryptographic-module-validation-program/documents/security-policies/140sp5096.pdf
+_FIPS_15_SP6_BINARIES: list[str] = [
+    f"SUSE:SLE-15-SP6:Update/pool/x86_64/openssl-3.35141/{name}-3.1.4-150600.5.15.1.x86_64.rpm"
+    for name in ("libopenssl-3-fips-provider",)
+] + [
+    f"SUSE:SLE-15-SP6:Update/pool/x86_64/libgcrypt.38414/{name}-1.10.3-150600.3.6.1.x86_64.rpm"
+    for name in ("libgcrypt20",)
 ]
 
 
@@ -161,16 +163,41 @@ def _get_asset_script(baseurl: str, binaries: list[str]) -> str:
 
 def _get_fips_base_custom_end(os_version: OsVersion) -> str:
     bins: list[str] = []
+    crypto_policies_deps = ("crypto-policies-scripts",)
+    if os_version.is_sle15:
+        crypto_policies_deps += (
+            "libopenssl1_1",
+            "python3-base",
+            "libpython3_6m1_0",
+            "perl-Bootloader",
+        )
+    else:
+        crypto_policies_deps += (
+            "libpython3_13-1_0",
+            "python313-base",
+            "update-bootloader",
+        )
+
     custom_set_fips_mode: str = (
-        f"{DOCKERFILE_RUN} update-crypto-policies --no-reload --set FIPS\n"
+        textwrap.dedent(f"""
+        {DOCKERFILE_RUN} fips-mode-setup --enable --no-bootcfg
+        {DOCKERFILE_RUN} rpm -e {" ".join(sorted(crypto_policies_deps))}
+        """)
+        + (
+            f"{DOCKERFILE_RUN} rpmqpack | grep -E '(openssl|libgcrypt)' | xargs zypper -n addlock\n"
+            if bins
+            else ""
+        )
+        + f"{DOCKERFILE_RUN} {LOG_CLEAN}"
     )
+
     match os_version:
-        case OsVersion.SP3:
-            bins = _FIPS_15_SP2_BINARIES
         case OsVersion.SP4:
             bins = _FIPS_15_SP4_BINARIES
+        case OsVersion.SP6:
+            bins = _FIPS_15_SP6_BINARIES
 
-    if os_version not in ALL_BASE_OS_VERSIONS:
+    if os_version not in ALL_OS_VERSIONS:
         raise NotImplementedError(f"Unsupported os_version: {os_version}")
 
     custom_install_bins: str = textwrap.dedent(
@@ -179,14 +206,13 @@ def _get_fips_base_custom_end(os_version: OsVersion) -> str:
                 [ $(LC_ALL=C rpm --checksig -v *rpm | \\
                     grep -c -E "^ *V3.*key ID 39db7c82: OK") = {len(bins)} ] \\
                 && rpm -Uvh --oldpackage --force *.rpm \\
-                && rm -vf *.rpm \\
-                && rpmqpack | grep -E '(openssl|libgcrypt)' | xargs zypper -n addlock\n"""
+                && rm -vf *.rpm\n"""
     )
 
     return (
         _get_asset_script(_FIPS_ASSET_BASEURL, bins)
         + (custom_install_bins if bins else "")
-        + (custom_set_fips_mode if os_version not in (OsVersion.SP3,) else "")
+        + custom_set_fips_mode
     )
 
 
@@ -207,9 +233,7 @@ def _get_fips_pretty_name(os_version: OsVersion) -> str:
     """Return a pretty name for FIPS enforcing containers."""
 
     if os_version.is_ltss:
-        if os_version == OsVersion.SP3:
-            return f"{os_version.pretty_os_version_no_dash} FIPS-140-2"
-        elif os_version == OsVersion.SP4:
+        if os_version in (OsVersion.SP4, OsVersion.SP6):
             return f"{os_version.pretty_os_version_no_dash} FIPS-140-3"
 
     if os_version.is_sle15 or os_version.is_sl16 or os_version.is_tumbleweed:
@@ -218,18 +242,8 @@ def _get_fips_pretty_name(os_version: OsVersion) -> str:
     raise NotImplementedError(f"Unsupported os_version: {os_version}")
 
 
-def _get_supported_until_fips(os_version: OsVersion) -> datetime.date | None:
-    """Returns the end of LTSS for images under LTSS, otherwise end of general support if known"""
-    match os_version:
-        case OsVersion.SP3:
-            return datetime.date(2025, 12, 31)
-        case OsVersion.SP4:
-            return datetime.date(2026, 12, 31)
-        case _:
-            return _SUPPORTED_UNTIL_SLE.get(os_version)
-
-
 def _get_fips_base_kwargs(os_version: OsVersion) -> dict:
+    """Return the kwargs for FIPS base container images."""
     return {
         "name": "base-fips",
         "exclusive_arch": [Arch.X86_64] if os_version.is_ltss else None,
@@ -240,36 +254,36 @@ def _get_fips_base_kwargs(os_version: OsVersion) -> dict:
             # preserve backwards compatibility on already released distributions
             os_version
             not in (
-                OsVersion.SP3,
                 OsVersion.SP4,
                 OsVersion.SP5,
                 OsVersion.SP6,
                 OsVersion.TUMBLEWEED,
             )
         ),
-        "supported_until": _get_supported_until_fips(os_version),
+        "supported_until": get_supported_until_ltss(os_version),
         "is_latest": (
             os_version in CAN_BE_LATEST_BASE_OS_VERSION
             or os_version in ALL_OS_LTSS_VERSIONS
         ),
         "pretty_name": _get_fips_pretty_name(os_version),
-        "package_list": (
-            [*os_version.release_package_names, "coreutils"]
-            + (
-                ["fipscheck"]
-                if os_version == OsVersion.SP3
-                else ["crypto-policies-scripts"]
-            )
+        "package_list": sorted(
+            [
+                *os_version.release_package_names,
+                "coreutils",
+                "crypto-policies-scripts",
+            ]
+            + (["perl-Bootloader"] if os_version.is_sle15 else ["update-bootloader"])
             + (["patterns-base-fips"] if os_version.is_sl16 else [])
         ),
         "extra_labels": {
-            "usage": "This container should only be used on a FIPS enabled host (fips=1 on kernel cmdline)."
+            "usage": "This container should only be used on a FIPS-140-3-enabled host (fips=1 on kernel cmdline)."
         },
         "custom_end": _get_fips_base_custom_end(os_version) + _get_fips_custom_env(),
         "min_release_counter": {
             OsVersion.SP6: 30,
             OsVersion.SL16_0: 4,
         },
+        "post_build_checks_containers": os_version in CAN_BE_SAC_VERSION,
     }
 
 
@@ -308,6 +322,7 @@ FIPS_MICRO_CONTAINERS = [
         min_release_counter={
             OsVersion.SL16_0: 5,
         },
+        post_build_checks_containers=os_version in CAN_BE_SAC_VERSION,
     )
     for os_version in ALL_BASE_OS_VERSIONS
 ]
@@ -369,7 +384,7 @@ MINIMAL_CONTAINERS = [
             sed -i 's/^\\([^:]*:[^:]*:\\)[^:]*\\(:.*\\)$/\\1\\2/' /etc/shadow
             rpm -e sed
 
-            # not making sense in a zypper-free image
+            # makes no sense in a zypper-free image
             rm -vf /var/lib/zypp/AutoInstalled
 
             # includes device and inode numbers that change on deploy
@@ -386,45 +401,31 @@ MINIMAL_CONTAINERS = [
 BUSYBOX_CONTAINERS = [
     OsContainer(
         name="busybox",
-        from_image=None,
+        from_target_image="scratch",
         os_version=os_version,
         support_level=SupportLevel.L3,
         supported_until=_SUPPORTED_UNTIL_SLE.get(os_version),
         pretty_name=f"{os_version.pretty_os_version_no_dash} BusyBox",
         logo_url="https://opensource.suse.com/bci/SLE_BCI_logomark_green.svg",
         is_latest=os_version in CAN_BE_LATEST_BASE_OS_VERSION,
-        build_recipe_type=BuildType.KIWI,
         cmd=["/bin/sh"],
         package_list=[
-            Package(name, pkg_type=PackageType.BOOTSTRAP)
-            for name in (
-                os_version.release_package_names
-                + (
-                    "busybox",
-                    "busybox-links",
-                    "ca-certificates-mozilla-prebuilt",
-                )
-                + os_version.eula_package_names
-            )
-        ],
-        config_sh_script=textwrap.dedent(
-            """
-            sed -i 's|/bin/bash|/bin/sh|' /etc/passwd
-
-            # not making sense in a zypper-free image
-            rm -vf /var/lib/zypp/AutoInstalled
-
-            # includes device and inode numbers that change on deploy
-            rm -vf /var/cache/ldconfig/aux-cache
+            "busybox",
+            "busybox-links",
+            "ca-certificates-mozilla-prebuilt",
+        ]
+        + [*os_version.release_package_names]
+        + [*os_version.eula_package_names],
+        custom_end=textwrap.dedent(
+            f"""
+            {DOCKERFILE_RUN} sed -i 's|/bin/bash|/bin/sh|' /etc/passwd
 
             # Will be recreated by the next rpm(1) run as root user
-            rm -vf /usr/lib/sysimage/rpm/Index.db
-
-            # set the day of last password change to empty
-            sed -i 's/^\\([^:]*:[^:]*:\\)[^:]*\\(:.*\\)$/\\1\\2/' /etc/shadow
+            {DOCKERFILE_RUN} rm -vf /usr/lib/sysimage/rpm/Index.db
         """
         ),
         config_sh_interpreter="/bin/sh",
+        post_build_checks_containers=os_version in CAN_BE_SAC_VERSION,
     )
     for os_version in ALL_BASE_OS_VERSIONS
 ]

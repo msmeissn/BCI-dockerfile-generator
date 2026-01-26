@@ -17,7 +17,6 @@ jobs:
       matrix:
         os_version:
           - 7
-          - 6
           - 5
           - "16.0"
           - "16.1"
@@ -25,11 +24,11 @@ jobs:
 
     steps:
       # we need all branches for the build checks
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: ~/.cache/pypoetry/virtualenvs
           key: poetry-${{ hashFiles('poetry.lock') }}

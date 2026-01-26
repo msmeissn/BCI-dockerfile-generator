@@ -16,7 +16,6 @@ from datetime import datetime
 from datetime import timedelta
 from enum import Enum
 from enum import unique
-from functools import reduce
 from io import BytesIO
 from pathlib import Path
 from typing import ClassVar
@@ -186,7 +185,7 @@ class StagingBot:
             self.branch_name = (
                 self.deployment_branch_name
                 + "-"
-                + "".join(random.choice(string.ascii_letters) for _ in range(5))
+                + "".join(random.choices(string.ascii_letters, k=5))
             )
 
         if not self.osc_username:
@@ -428,12 +427,12 @@ jobs:
     container: registry.opensuse.org/opensuse/bci/bci-ci:latest
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           ref: main
           fetch-depth: 0
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: ~/.cache/pypoetry/virtualenvs
           key: poetry-${{ hashFiles('poetry.lock') }}
@@ -489,13 +488,13 @@ jobs:
 
     steps:
       # we need all branches for the build checks
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: main
           token: ${{ secrets.CHECKOUT_TOKEN }}
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: ~/.cache/pypoetry/virtualenvs
           key: poetry-${{ hashFiles('poetry.lock') }}
@@ -832,17 +831,7 @@ PACKAGES={",".join(self.package_names) if self.package_names else None}
                     packages.append(b_path[0])
 
         res = list(set(packages))
-
-        # it can happen that we only update a non-BCI package file,
-        # e.g. .obs/workflows.yml, then we will have a commit, but the diff will
-        # not touch any BCI and thus `res` will be an empty list
-        # => give reduce an initial value (last parameter) as it will otherwise
-        #    fail
-        assert reduce(
-            lambda folder_a, folder_b: folder_a and folder_b,
-            (pkg in bci_pkg_names for pkg in res),
-            True,
-        )
+        assert all(pkg in bci_pkg_names for pkg in res)
         return res
 
     async def _run_git_action_in_worktree(

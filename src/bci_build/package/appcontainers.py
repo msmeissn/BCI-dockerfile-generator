@@ -1,5 +1,6 @@
 """Application Containers that are generated with the BCI tooling"""
 
+import textwrap
 from pathlib import Path
 
 from bci_build.container_attributes import TCP
@@ -10,6 +11,7 @@ from bci_build.os_version import ALL_NONBASE_OS_VERSIONS
 from bci_build.os_version import CAN_BE_LATEST_OS_VERSION
 from bci_build.os_version import OsVersion
 from bci_build.package import DOCKERFILE_RUN
+from bci_build.package import SET_BLKID_SCAN
 from bci_build.package import ApplicationStackContainer
 from bci_build.package import OsContainer
 from bci_build.package import _build_tag_prefix
@@ -128,13 +130,13 @@ THREE_EIGHT_NINE_DS_CONTAINERS = [
         custom_end=rf"""
 COPY nsswitch.conf /etc/nsswitch.conf
 
-{DOCKERFILE_RUN} mkdir -p /data/config; \
-    mkdir -p /data/ssca; \
-    mkdir -p /data/run; \
-    mkdir -p /var/run/dirsrv; \
+{DOCKERFILE_RUN} install -d -o dirsrv -g dirsrv /data; \
+    install -d -o dirsrv -g dirsrv /data/config  /data/ssca /data/run /var/run/dirsrv; \
     ln -s /data/config /etc/dirsrv/slapd-localhost; \
     ln -s /data/ssca /etc/dirsrv/ssca; \
-    ln -s /data/run /var/run/dirsrv
+    ln -s /data/run /var/run/dirsrv; \
+    chown -R dirsrv: /data /var/run/dirsrv;\
+    chgrp -R dirsrv /etc/dirsrv;
 
 HEALTHCHECK --start-period=5m --timeout=5s --interval=5s --retries=2 \
     CMD /usr/lib/dirsrv/dscontainer -H
@@ -209,7 +211,7 @@ ALERTMANAGER_CONTAINERS = [
         exposes_ports=[TCP(_ALERTMANAGER_PORT)],
         custom_end=_generate_prometheus_family_healthcheck(_ALERTMANAGER_PORT),
     )
-    for os_version in {v for v in ALL_NONBASE_OS_VERSIONS if v != OsVersion.SL16_0}
+    for os_version in (OsVersion.SP7, OsVersion.TUMBLEWEED)
 ]
 
 _BLACKBOX_EXPORTER_PACKAGE_NAME = "prometheus-blackbox_exporter"
@@ -239,7 +241,7 @@ BLACKBOX_EXPORTER_CONTAINERS = [
         exposes_ports=[TCP(_BLACKBOX_PORT)],
         custom_end=_generate_prometheus_family_healthcheck(_BLACKBOX_PORT),
     )
-    for os_version in {v for v in ALL_NONBASE_OS_VERSIONS if v != OsVersion.SL16_0}
+    for os_version in (OsVersion.SP7, OsVersion.TUMBLEWEED)
 ]
 
 
@@ -257,8 +259,6 @@ for filename in (
 def _get_nginx_kwargs(os_version: OsVersion):
     nginx_version = get_pkg_version("nginx", os_version)
 
-    version_check_lines = generate_package_version_check("nginx", nginx_version)
-
     kwargs = {
         "os_version": os_version,
         "is_latest": os_version in CAN_BE_LATEST_OS_VERSION,
@@ -271,25 +271,36 @@ def _get_nginx_kwargs(os_version: OsVersion):
                 parse_version=ParseVersion.MINOR,
             )
         ],
-        "package_list": ["gawk", "nginx", "findutils", _envsubst_pkg_name(os_version)],
+        "package_list": (
+            [
+                "curl",
+                "gawk",
+                "nginx",
+                "findutils",
+                _envsubst_pkg_name(os_version),
+            ]
+        )
+        + (["libcurl-mini4"] if os_version.is_sl16 else []),
         "entrypoint": ["/usr/local/bin/docker-entrypoint.sh"],
+        "from_target_image": generate_from_image_tag(os_version, "bci-micro"),
         "cmd": ["nginx", "-g", "daemon off;"],
         "build_recipe_type": BuildType.DOCKER,
         "extra_files": _NGINX_FILES,
         "support_level": SupportLevel.L3,
         "exposes_ports": [TCP(80)],
-        "custom_end": f"""{version_check_lines}
-{DOCKERFILE_RUN} mkdir /docker-entrypoint.d
-COPY [1-3]0-*.sh /docker-entrypoint.d/
-COPY docker-entrypoint.sh /usr/local/bin
-COPY index.html /srv/www/htdocs/
-{DOCKERFILE_RUN} chmod +x /docker-entrypoint.d/*.sh /usr/local/bin/docker-entrypoint.sh
-{DOCKERFILE_RUN} install -d -o nginx -g nginx -m 750 /var/log/nginx; \
-    ln -sf /dev/stdout /var/log/nginx/access.log; \
-    ln -sf /dev/stderr /var/log/nginx/error.log
-
-STOPSIGNAL SIGQUIT
-""",
+        "build_stage_custom_end": generate_package_version_check(
+            "nginx", nginx_version, use_target=True
+        ),
+        "custom_end": textwrap.dedent(f"""
+            {DOCKERFILE_RUN} mkdir /docker-entrypoint.d
+            COPY [1-3]0-*.sh /docker-entrypoint.d/
+            COPY docker-entrypoint.sh /usr/local/bin
+            COPY index.html /srv/www/htdocs/
+            {DOCKERFILE_RUN} chmod +x /docker-entrypoint.d/*.sh /usr/local/bin/docker-entrypoint.sh
+            {DOCKERFILE_RUN} install -d -o nginx -g nginx -m 750 /var/log/nginx; \
+                ln -sf /dev/stdout /var/log/nginx/access.log; \
+                ln -sf /dev/stderr /var/log/nginx/error.log
+            STOPSIGNAL SIGQUIT"""),
     }
 
     return kwargs
@@ -315,10 +326,13 @@ REGISTRY_CONTAINERS = [
         os_version=os_version,
         is_latest=os_version in CAN_BE_LATEST_OS_VERSION,
         version="%%registry_version%%",
-        tag_version=format_version(
-            get_pkg_version("distribution", os_version), ParseVersion.MINOR
+        tag_version=(
+            distribution_version := format_version(
+                get_pkg_version("distribution", os_version), ParseVersion.MINOR
+            )
         ),
         version_in_uid=False,
+        is_singleton_image=True,
         replacements_via_service=[
             Replacement(
                 regex_in_build_description="%%registry_version%%",
@@ -341,6 +355,16 @@ REGISTRY_CONTAINERS = [
         min_release_counter={
             OsVersion.SP7: 15,
         },
+        build_stage_custom_end=generate_package_version_check(
+            "distribution-registry", distribution_version, use_target=True
+        )
+        + (f"\n{SET_BLKID_SCAN}\n" if os_version.is_sle15 else ""),
+        custom_end=(
+            f"{DOCKERFILE_RUN} install -d -m 0755 -o registry -g registry /var/lib/docker-registry\n"
+            if not os_version.is_sle15
+            else ""
+        )
+        + ("COPY --from=builder /etc/blkid.conf /etc\n" if os_version.is_sle15 else ""),
     )
     for os_version in ALL_NONBASE_OS_VERSIONS
 ]

@@ -8,7 +8,7 @@
 language, with syntax loosely derived from C. Go offers additional features
 such as garbage collection, type safety, certain dynamic-typing capabilities,
 additional built-in types (for example, variable-length arrays and key-value
-maps) as well as a large standard library.
+maps) and a large standard library.
 
 {%- if image.tag_version.endswith('-openssl') %}
 
@@ -25,11 +25,11 @@ library, for cryptographic operations in the container environment.
 ## Usage
 We recommend using the Go image as a build environment. Thus,
 the compiler does not need to be shipped as part of the images that are
-deployed. Instead, we recommend to use the Go image as the
+deployed. Instead, we recommend using the Go image as the
 builder image only.
 
 There are two options to work with Go images. First, you can encapsulate your
-application in a `scratch` container image, essentially an empty filesystem
+application in a `scratch` container image, essentially an empty file system
 image. This approach only works if your Go application does not depend on libc
 or any other library or files, as they will not be available.
 
@@ -93,9 +93,9 @@ $ podman run --rm -v "$PWD":/app:Z -w /app {{ image.pretty_reference }} go test 
 ```
 
 
-### Building from SLE BCI
+### Building from {{ short_bci }}
 
-The [SLE BCI General Purpose Base Containers](https://opensource.suse.com/bci-docs/documentation/general-purpose-bci/)
+The [{{ short_bci }} General Purpose Base Containers](https://opensource.suse.com/bci-docs/documentation/general-purpose-bci/)
 images offer four different options for deployment, depending on your exact requirements.
 
 ```Dockerfile
@@ -121,8 +121,8 @@ COPY --from=build /hello /usr/local/bin/hello
 CMD ["/usr/local/bin/hello"]
 ```
 
-The above example uses the SLE BCI micro image as the deployment image for
-the resulting application. See the [SLE BCI use with Go
+The above example uses the {{ short_bci }} micro image as the deployment image for
+the resulting application. See the [{{ short_bci }} use with Go
 documentation](https://opensource.suse.com/bci-docs/guides/use-with-golang/)
 for further details.
 
@@ -142,7 +142,7 @@ import _ "crypto/tls/fipsonly"
 
 ## Additional tools
 
-In addition to the standard SLE BCI development packages, the following tools
+In addition to the standard {{ short_bci }} development packages, the following tools
 are included in the image:
 
 - go{{ image.tag_version }}-race

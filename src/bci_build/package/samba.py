@@ -19,8 +19,9 @@ SAMBA_SERVER_CONTAINERS = []
 SAMBA_CLIENT_CONTAINERS = []
 SAMBA_TOOLBOX_CONTAINERS = []
 
-
-for os_version in (OsVersion.TUMBLEWEED, OsVersion.SP7):
+# Samba is deprecated
+# Only available in SP7 because that is where we released it as Tech Preview
+for os_version in (OsVersion.SP7,):
     samba_version = get_pkg_version("samba", os_version)
 
     srv = ApplicationStackContainer(
